@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <!-- Fix 1: Set referrer policy so YouTube receives correct origin info -->
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Learn2Sing Player</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+    #player {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0; left: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="player"></div>
+
+  <script>
+    // ─── State ───────────────────────────────────────────────────────────────
+    var player = null;
+    var timeInterval = null;
+    var currentRate = 1.0;
+    var pitchLockEnabled = false;
+
+    // ─── YouTube IFrame API bootstrap ────────────────────────────────────────
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player('player', {
+        height: '100%',
+        width: '100%',
+        videoId: '',
+        // Fix 2: Use youtube-nocookie.com to avoid cookie/referrer blocks
+        host: 'https://www.youtube-nocookie.com',
+        playerVars: {
+          playsinline: 1,
+          controls: 1,
+          rel: 0,
+          showinfo: 0,
+          modestbranding: 1,
+          iv_load_policy: 3,
+          cc_load_policy: 0,
+          // Fix 3: Set origin to avoid referrer mismatch errors
+          origin: 'https://www.youtube-nocookie.com'
+        },
+        events: {
+          onReady: onPlayerReady,
+          onStateChange: onPlayerStateChange,
+          onError: onPlayerError
+        }
+      });
+    }
+
+    function onPlayerReady(event) {
+      if (typeof Android !== 'undefined') {
+        Android.onPlayerReady();
+      }
+      startTimeTracking();
+    }
+
+    function onPlayerStateChange(event) {
+      if (typeof Android !== 'undefined') {
+        Android.onStateChange(event.data);
+      }
+    }
+
+    function onPlayerError(event) {
+      if (typeof Android !== 'undefined') {
+        Android.onPlayerError(event.data);
+      }
+    }
+
+    // ─── Time tracking (fires every 500 ms) ──────────────────────────────────
+    function startTimeTracking() {
+      if (timeInterval) clearInterval(timeInterval);
+      timeInterval = setInterval(function () {
+        if (player && typeof player.getCurrentTime === 'function') {
+          var t = player.getCurrentTime();
+          if (typeof Android !== 'undefined') {
+            Android.onTimeUpdate(t);
+          }
+        }
+      }, 500);
+    }
+
+    // ─── Public API called from Java via evaluateJavascript() ────────────────
+
+    function loadVideo(videoId) {
+      if (player && typeof player.loadVideoById === 'function') {
+        player.loadVideoById({ videoId: videoId });
+      }
+    }
+
+    function cueVideo(videoId) {
+      if (player && typeof player.cueVideoById === 'function') {
+        player.cueVideoById({ videoId: videoId });
+      }
+    }
+
+    function setPlaybackRate(rate) {
+      currentRate = rate;
+      if (player && typeof player.setPlaybackRate === 'function') {
+        player.setPlaybackRate(rate);
+      }
+    }
+
+    function getPlaybackRate() {
+      if (player && typeof player.getPlaybackRate === 'function') {
+        return player.getPlaybackRate();
+      }
+      return 1.0;
+    }
+
+    function playVideo() {
+      if (player && typeof player.playVideo === 'function') {
+        player.playVideo();
+      }
+    }
+
+    function pauseVideo() {
+      if (player && typeof player.pauseVideo === 'function') {
+        player.pauseVideo();
+      }
+    }
+
+    function seekTo(seconds) {
+      if (player && typeof player.seekTo === 'function') {
+        player.seekTo(seconds, true);
+      }
+    }
+
+    function getCurrentTime() {
+      if (player && typeof player.getCurrentTime === 'function') {
+        return player.getCurrentTime();
+      }
+      return 0;
+    }
+
+    function getDuration() {
+      if (player && typeof player.getDuration === 'function') {
+        return player.getDuration();
+      }
+      return 0;
+    }
+
+    function getVideoTitle() {
+      if (player && typeof player.getVideoData === 'function') {
+        var data = player.getVideoData();
+        return data ? (data.title || '') : '';
+      }
+      return '';
+    }
+
+    function setPitchLock(enabled) {
+      pitchLockEnabled = enabled;
+      if (typeof Android !== 'undefined') {
+        Android.onPitchLockChanged(enabled);
+      }
+    }
+
+    function mute(shouldMute) {
+      if (player) {
+        if (shouldMute) { player.mute(); } else { player.unMute(); }
+      }
+    }
+
+    function setVolume(vol) {
+      if (player && typeof player.setVolume === 'function') {
+        player.setVolume(vol);
+      }
+    }
+  </script>
+
+  <!-- Load YouTube IFrame API last so DOM is ready -->
+  <script src="https://www.youtube.com/iframe_api" async></script>
+</body>
+</html>

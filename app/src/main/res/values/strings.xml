@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Learn2Sing</string>
+    <string name="search_hint">Search for a song to learn…</string>
+    <string name="search_button">Search</string>
+    <string name="speed_label">Speed</string>
+    <string name="lyrics_loading">Fetching lyrics…</string>
+    <string name="lyrics_not_found">No synced lyrics found for this song.</string>
+    <string name="pitch_lock_label">Pitch Lock</string>
+    <string name="pitch_lock_note">Keeps original key while changing speed</string>
+    <string name="no_results">No results found. Try a different search.</string>
+    <string name="loading">Loading…</string>
+    <string name="api_key_missing">Please add your YouTube API key in Constants.java</string>
+</resources>

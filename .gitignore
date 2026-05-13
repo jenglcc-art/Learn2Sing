@@ -1,0 +1,36 @@
+# Built outputs
+*.apk
+*.aab
+*.aar
+*.jar
+/build/
+app/build/
+
+# Gradle
+.gradle/
+local.properties
+gradle/wrapper/gradle-wrapper.jar
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin / Java
+out/
+
+# Secrets — never commit API keys or tokens
+# (OAuth client ID in Constants.java is a web client ID, not a secret,
+#  but exclude any keystore or signing config files)
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# OS
+.DS_Store
+Thumbs.db
