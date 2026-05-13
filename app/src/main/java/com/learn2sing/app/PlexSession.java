@@ -20,7 +20,8 @@ public class PlexSession {
 
     private String clientId;
     private String authToken;
-    private String serverUri;
+    private String serverUri;         // active URI (local when on home WiFi)
+    private String serverUriRemote;   // best remote/relay URI saved at discovery time
     private String sectionId;
 
     private PlexSession() {}
@@ -42,6 +43,9 @@ public class PlexSession {
         String saved = prefs.getString(Constants.PREF_PLEX_SERVER_URI, null);
         serverUri = toHttps(saved);
 
+        String savedRemote = prefs.getString(Constants.PREF_PLEX_SERVER_URI_REMOTE, null);
+        serverUriRemote = toHttps(savedRemote);
+
         // clientId is permanent — create once, keep forever
         clientId = prefs.getString(Constants.PREF_PLEX_CLIENT_ID, null);
         if (clientId == null) {
@@ -62,6 +66,20 @@ public class PlexSession {
         prefs(ctx).edit().putString(Constants.PREF_PLEX_SERVER_URI, uri).apply();
     }
 
+    public void saveRemoteServer(Context ctx, String uri) {
+        serverUriRemote = uri;
+        prefs(ctx).edit().putString(Constants.PREF_PLEX_SERVER_URI_REMOTE, uri).apply();
+    }
+
+    /**
+     * Called when the local server URI is unreachable and the remote one works.
+     * Updates the active serverUri for the rest of this session only — the local
+     * URI is kept in prefs so we use it again the next time we're on home WiFi.
+     */
+    public void switchToRemoteServer(String remoteUri) {
+        serverUri = remoteUri;
+    }
+
     public void saveSection(Context ctx, String id) {
         sectionId = id;
         prefs(ctx).edit().putString(Constants.PREF_PLEX_SECTION_ID, id).apply();
@@ -70,10 +88,12 @@ public class PlexSession {
     public void signOut(Context ctx) {
         authToken = null;
         serverUri = null;
+        serverUriRemote = null;
         sectionId = null;
         prefs(ctx).edit()
                 .remove(Constants.PREF_PLEX_TOKEN)
                 .remove(Constants.PREF_PLEX_SERVER_URI)
+                .remove(Constants.PREF_PLEX_SERVER_URI_REMOTE)
                 .remove(Constants.PREF_PLEX_SECTION_ID)
                 .apply();
     }
@@ -83,10 +103,11 @@ public class PlexSession {
     public boolean isAuthenticated() { return authToken != null && !authToken.isEmpty(); }
     public boolean hasServer()       { return serverUri != null && !serverUri.isEmpty(); }
 
-    public String getClientId()  { return clientId; }
-    public String getAuthToken() { return authToken; }
-    public String getServerUri() { return serverUri; }
-    public String getSectionId() { return sectionId; }
+    public String getClientId()       { return clientId; }
+    public String getAuthToken()      { return authToken; }
+    public String getServerUri()      { return serverUri; }
+    public String getServerUriRemote(){ return serverUriRemote; }
+    public String getSectionId()      { return sectionId; }
 
     /** Convenience: append token as query param — standard Plex auth method. */
     public String tokenParam() {

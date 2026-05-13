@@ -57,10 +57,11 @@ public final class Constants {
     // ── SharedPreferences keys ────────────────────────────────────────────────
     public static final String PREFS_NAME           = "learn2sing_prefs";
     public static final String PREF_LIKED_VIDEOS    = "liked_video_ids";
-    public static final String PREF_PLEX_TOKEN      = "plex_token";
-    public static final String PREF_PLEX_CLIENT_ID  = "plex_client_id";
-    public static final String PREF_PLEX_SERVER_URI = "plex_server_uri";
-    public static final String PREF_PLEX_SECTION_ID = "plex_section_id";
+    public static final String PREF_PLEX_TOKEN              = "plex_token";
+    public static final String PREF_PLEX_CLIENT_ID          = "plex_client_id";
+    public static final String PREF_PLEX_SERVER_URI         = "plex_server_uri";
+    public static final String PREF_PLEX_SERVER_URI_REMOTE  = "plex_server_uri_remote";
+    public static final String PREF_PLEX_SECTION_ID         = "plex_section_id";
 
     // ── Intent extras (Plex) ─────────────────────────────────────────────────
     public static final String EXTRA_STREAM_URL    = "extra_stream_url";

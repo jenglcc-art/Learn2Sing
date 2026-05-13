@@ -90,15 +90,23 @@ public class PlexRetrofitClient {
                 urlBuilder.addQueryParameter("X-Plex-Token", authToken);
             }
 
-            Request newRequest = chain.request().newBuilder()
+            Request.Builder reqBuilder = chain.request().newBuilder()
                     .url(urlBuilder.build())
                     .header("X-Plex-Client-Identifier", clientId)
                     .header("X-Plex-Product",           Constants.PLEX_PRODUCT)
                     .header("X-Plex-Version",           Constants.PLEX_VERSION)
                     .header("X-Plex-Platform",          Constants.PLEX_PLATFORM)
-                    .header("Accept",                   "application/json")
-                    .header("X-Plex-Token",             authToken != null ? authToken : "")
-                    .build();
+                    .header("Accept",                   "application/json");
+
+            // Only set X-Plex-Token if this client has one.
+            // When authToken is null (plex.tv service before login), we leave the
+            // header alone so that a @Header("X-Plex-Token") annotation on the
+            // method can pass through without being overwritten by an empty string.
+            if (authToken != null && !authToken.isEmpty()) {
+                reqBuilder.header("X-Plex-Token", authToken);
+            }
+
+            Request newRequest = reqBuilder.build();
 
             Log.d(TAG, "→ " + newRequest.url());
             okhttp3.Response response = chain.proceed(newRequest);
@@ -115,10 +123,26 @@ public class PlexRetrofitClient {
 
     // ── plex.tv service (PIN OAuth + server discovery) ────────────────────────
 
+    /** Unauthenticated plex.tv service — used for PIN creation and polling. */
     public static PlexTvApiService getPlexTvService(String clientId) {
         return new Retrofit.Builder()
                 .baseUrl(Constants.PLEX_TV_BASE_URL)
                 .client(buildPlexClient(clientId, null))
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+                .create(PlexTvApiService.class);
+    }
+
+    /**
+     * Authenticated plex.tv service — used for server discovery after login.
+     * The token is baked into the OkHttp interceptor so it is sent as both a
+     * header and a query parameter on every request, exactly like server calls.
+     */
+    public static PlexTvApiService getAuthenticatedPlexTvService(
+            String clientId, String authToken) {
+        return new Retrofit.Builder()
+                .baseUrl(Constants.PLEX_TV_BASE_URL)
+                .client(buildPlexClient(clientId, authToken))
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()
                 .create(PlexTvApiService.class);

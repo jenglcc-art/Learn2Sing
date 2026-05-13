@@ -4,7 +4,6 @@ import java.util.List;
 
 import retrofit2.Call;
 import retrofit2.http.GET;
-import retrofit2.http.Header;
 import retrofit2.http.POST;
 import retrofit2.http.Path;
 import retrofit2.http.Query;
@@ -29,10 +28,13 @@ public interface PlexTvApiService {
     @GET("api/v2/pins/{id}")
     Call<PinResponse> checkPin(@Path("id") long pinId);
 
-    /** Step 4: list all Media Servers for the authenticated user. */
+    /**
+     * Step 4: list all Media Servers for the authenticated user.
+     * Use with getAuthenticatedPlexTvService() — the token is sent via the
+     * OkHttp interceptor (both header and query param), not @Header annotation.
+     */
     @GET("api/v2/resources")
-    Call<List<PlexResourcesResponse>> getResources(
-            @Header("X-Plex-Token") String authToken);
+    Call<List<PlexResourcesResponse>> getResources();
 
     // ── Inner response model ───────────────────────────────────────────────
 

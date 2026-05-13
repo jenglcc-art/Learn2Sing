@@ -61,6 +61,14 @@ public class MainActivity extends AppCompatActivity {
     private PlexSession          plexSession;
     private PlexServerApiService serverApi;
 
+    /**
+     * False while testConnection() / tryRemoteFallback() is still in progress.
+     * Searches are blocked until a working server URI is confirmed, preventing
+     * the race condition where a search fires against the local IP before the
+     * remote fallback has had a chance to switch serverApi.
+     */
+    private boolean connectionReady = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -104,37 +112,101 @@ public class MainActivity extends AppCompatActivity {
                 plexSession.getAuthToken());
     }
 
-    /** Fires a lightweight /identity call to verify connectivity and log the result. */
+    /**
+     * Fires a lightweight /identity call to verify connectivity.
+     * Blocks search until a working server is confirmed.
+     * If the local URI fails, automatically retries with the remote fallback.
+     */
     private void testConnection() {
+        connectionReady = false;
+        setSearchEnabled(false, "Checking connection…");
         Log.d(TAG, "Testing connection to: " + plexSession.getServerUri());
+
         serverApi.identity().enqueue(new Callback<ResponseBody>() {
             @Override
             public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    try {
-                        String body = response.body().string();
-                        Log.d(TAG, "✓ /identity OK: " + body.substring(0, Math.min(200, body.length())));
-                    } catch (Exception e) {
-                        Log.d(TAG, "✓ /identity OK (unreadable body)");
-                    }
+                if (response.isSuccessful()) {
+                    Log.d(TAG, "✓ /identity OK (local)");
+                    onConnectionReady("Local");
                 } else {
-                    Log.w(TAG, "✗ /identity failed HTTP " + response.code());
-                    runOnUiThread(() -> Toast.makeText(MainActivity.this,
-                            "Plex server returned HTTP " + response.code()
-                            + "\nCheck Plex settings or sign out and reconnect.",
-                            Toast.LENGTH_LONG).show());
+                    Log.w(TAG, "✗ /identity HTTP " + response.code());
+                    tryRemoteFallback();
                 }
             }
 
             @Override
             public void onFailure(Call<ResponseBody> call, Throwable t) {
-                Log.e(TAG, "✗ /identity network error: " + t.getMessage(), t);
-                runOnUiThread(() -> Toast.makeText(MainActivity.this,
-                        "Cannot reach Plex at " + plexSession.getServerUri()
-                        + "\n" + t.getMessage(),
-                        Toast.LENGTH_LONG).show());
+                Log.e(TAG, "✗ /identity failed: " + t.getMessage());
+                tryRemoteFallback();
             }
         });
+    }
+
+    /**
+     * Tries the remote server URI saved at auth time.
+     * If it works, switches serverApi and unblocks search.
+     * The local URI stays in prefs for the next time we're on home WiFi.
+     */
+    private void tryRemoteFallback() {
+        String remoteUri = plexSession.getServerUriRemote();
+        if (remoteUri == null || remoteUri.equals(plexSession.getServerUri())) {
+            runOnUiThread(() -> showConnectionError());
+            return;
+        }
+        Log.d(TAG, "Trying remote fallback: " + remoteUri);
+        runOnUiThread(() -> setSearchEnabled(false, "Trying remote access…"));
+
+        PlexServerApiService fallbackApi = PlexRetrofitClient.getServerService(
+                remoteUri, plexSession.getClientId(), plexSession.getAuthToken());
+
+        fallbackApi.identity().enqueue(new Callback<ResponseBody>() {
+            @Override
+            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                if (response.isSuccessful()) {
+                    Log.d(TAG, "✓ Remote fallback OK: " + remoteUri);
+                    plexSession.switchToRemoteServer(remoteUri);
+                    serverApi = fallbackApi;
+                    runOnUiThread(() -> onConnectionReady("Remote"));
+                } else {
+                    Log.w(TAG, "✗ Remote fallback HTTP " + response.code());
+                    runOnUiThread(() -> showConnectionError());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ResponseBody> call, Throwable t) {
+                Log.e(TAG, "✗ Remote fallback failed: " + t.getMessage());
+                runOnUiThread(() -> showConnectionError());
+            }
+        });
+    }
+
+    /** Called once a working server URI (local or remote) has been confirmed. */
+    private void onConnectionReady(String label) {
+        connectionReady = true;
+        setSearchEnabled(true, null);
+        if ("Remote".equals(label)) {
+            Toast.makeText(this, "Connected via remote access", Toast.LENGTH_SHORT).show();
+        }
+        Log.d(TAG, "Connection ready (" + label + "): " + plexSession.getServerUri());
+    }
+
+    /** Enables or disables the search button; optionally shows a status hint. */
+    private void setSearchEnabled(boolean enabled, String hint) {
+        View btnSearch = findViewById(R.id.btn_search);
+        if (btnSearch != null) btnSearch.setEnabled(enabled);
+        etSearch.setEnabled(enabled);
+        if (hint != null) {
+            tvEmpty.setText(hint);
+            tvEmpty.setVisibility(View.VISIBLE);
+        } else {
+            tvEmpty.setVisibility(View.GONE);
+        }
+    }
+
+    private void showConnectionError() {
+        connectionReady = false;
+        setSearchEnabled(false, "Cannot reach Plex server.\nCheck Remote Access in Plex settings.");
     }
 
     private void populateHeader() {
@@ -169,6 +241,11 @@ public class MainActivity extends AppCompatActivity {
     // ── Plex search ───────────────────────────────────────────────────────────
 
     private void performPlexSearch() {
+        if (!connectionReady) {
+            Toast.makeText(this, "Still checking connection, please wait…",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
         String query = etSearch.getText().toString().trim();
         if (query.isEmpty()) {
             etSearch.setError("Enter a song or artist name");

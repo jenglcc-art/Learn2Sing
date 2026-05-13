@@ -178,7 +178,11 @@ public class PlexAuthActivity extends AppCompatActivity {
         tvCode.setVisibility(View.GONE);
         btnOpenBrowser.setVisibility(View.GONE);
 
-        plexTvApi.getResources(session.getAuthToken())
+        // Use a freshly-built client with the token baked in — avoids any
+        // interaction between @Header annotations and OkHttp interceptors.
+        PlexRetrofitClient.getAuthenticatedPlexTvService(
+                        session.getClientId(), session.getAuthToken())
+                .getResources()
                 .enqueue(new Callback<List<PlexResourcesResponse>>() {
                     @Override
                     public void onResponse(Call<List<PlexResourcesResponse>> call,
@@ -195,6 +199,13 @@ public class PlexAuthActivity extends AppCompatActivity {
                             return;
                         }
                         session.saveServer(PlexAuthActivity.this, bestUri);
+
+                        // Also save a remote URI so the app works away from home WiFi.
+                        String remoteUri = chooseRemoteServerUri(response.body());
+                        if (remoteUri != null && !remoteUri.equals(bestUri)) {
+                            session.saveRemoteServer(PlexAuthActivity.this, remoteUri);
+                        }
+
                         discoverMusicSection();
                     }
                     @Override
@@ -242,6 +253,47 @@ public class PlexAuthActivity extends AppCompatActivity {
             // 5. Any HTTP as last resort — upgrade to HTTPS
             for (PlexResourcesResponse.Connection conn : resource.connections) {
                 if (conn.uri != null) return toHttps(conn.uri);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns the best non-local connection URI — used as a fallback when the
+     * local URI is unreachable (e.g. user is away from home WiFi).
+     *
+     * Priority: remote HTTPS plex.direct → relay → any remote HTTP→HTTPS
+     */
+    private String chooseRemoteServerUri(List<PlexResourcesResponse> resources) {
+        for (PlexResourcesResponse resource : resources) {
+            if (resource.provides == null || !resource.provides.contains("server")) continue;
+            if (resource.connections == null) continue;
+
+            // 1. Remote HTTPS (non-relay)
+            for (PlexResourcesResponse.Connection conn : resource.connections) {
+                if (!conn.local && !conn.relay && conn.uri != null
+                        && conn.uri.startsWith("https")) {
+                    return conn.uri;
+                }
+            }
+            // 2. Relay HTTPS
+            for (PlexResourcesResponse.Connection conn : resource.connections) {
+                if (conn.relay && conn.uri != null
+                        && conn.uri.startsWith("https")) {
+                    return conn.uri;
+                }
+            }
+            // 3. Any relay
+            for (PlexResourcesResponse.Connection conn : resource.connections) {
+                if (conn.relay && conn.uri != null) {
+                    return toHttps(conn.uri);
+                }
+            }
+            // 4. Any remote
+            for (PlexResourcesResponse.Connection conn : resource.connections) {
+                if (!conn.local && conn.uri != null) {
+                    return toHttps(conn.uri);
+                }
             }
         }
         return null;
